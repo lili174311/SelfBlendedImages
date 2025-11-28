@@ -131,7 +131,25 @@ CUDA_VISIBLE_DEVICES=* python3 src/train_sbi.py \
 src/configs/sbi/base.json \
 -n sbi
 ```
+命令含义：
+- `CUDA_VISIBLE_DEVICES=*`：让 Python 看到当前机器上所有可用 GPU（可按需改成 `0,1` 等指定卡）。
+- `python3 src/train_sbi.py src/configs/sbi/base.json`：用配置文件里的数据路径与超参数启动自融合训练流程。
+- `-n sbi`：给本次实验起名为 `sbi`，所有日志与权重会写到 `./output/sbi/` 目录下。
 Top five checkpoints will be saved in `./output/` folder. As described in our paper, we use the latest one for evaluations.
+这里的 checkpoint 指训练过程中自动保存到 `./output/<实验名>/weights/` 下的权重文件（形如 `12_0.9750_val.tar`）。每个文件里包含当前的模型参数、优化器状态和 epoch 号，脚本会根据验证 AUC 维持最多 5 份最佳权重，并在训练结束时使用最后一次写入的那份（即最新的最佳权重）进行评估。
+
+## Exporting self-blended image pairs
+If you want to store the on-the-fly generated "fake"/"real" pairs as actual image files for use in another project, you can reuse the same augmentation pipeline without modifying the training loop. Running this helper script is optional and does not change the normal training/checkpoint workflow; it only reads the existing preprocessed frames and writes PNGs to the directory you specify:
+```bash
+CUDA_VISIBLE_DEVICES=* python3 src/export_sbi_images.py \
+    --phase train \
+    --image-size 224 \
+    --output-dir export_sbi \
+    --num-samples 200 \
+    --resume
+```
+This will create `export_sbi/fake/` and `export_sbi/real/` folders containing matching `.png` pairs. The script simply iterates the `SBI_Dataset` (one entry per preprocessed frame that has both landmark and RetinaFace `.npy` files) in order; for each frame it saves the cropped/normalized **real** face as `real_xxxxxx.png` and the self-blended **fake** face generated from the same frame as `fake_xxxxxx.png`. Set `--num-samples 0` (default) to export the entire split. Use `--resume` to append after existing PNGs or pass `--overwrite` if you want to re-export from scratch when the target directory is non-empty.
+如果目录中已经存在部分导出，脚本会在 `--resume` 时先检查 fake/real 数量是否相等；不相等会直接报错，避免覆盖错误文件，数量相等则从当前最大编号的下一张继续写入。
 
 # Citation
 If you find our work useful for your research, please consider citing our paper:
